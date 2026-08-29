@@ -16,7 +16,7 @@
         * { box-sizing: border-box; margin: 0; padding: 0; }
         body { font-family: system-ui, -apple-system, sans-serif; background: var(--bg-color); color: var(--text-color); height: 100vh; display: flex; flex-direction: column; overflow: hidden; }
         
-        #browser-header { background: var(--panel-bg); border-bottom: 1px solid var(--border-color); display: flex; flex-direction: column; }
+        #browser-header { background: var(--panel-bg); border-bottom: 1px solid var(--border-color); display: flex; flex-direction: column; flex-shrink: 0; }
         
         #tab-bar { display: flex; overflow-x: auto; background: #090d16; padding: 6px 6px 0 6px; gap: 4px; border-bottom: 1px solid var(--border-color); }
         .tab { background: #1e293b; color: #94a3b8; padding: 6px 12px; font-size: 0.85rem; border-radius: 6px 6px 0 0; cursor: pointer; display: flex; align-items: center; gap: 8px; max-width: 180px; min-width: 100px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; border: 1px solid transparent; }
@@ -34,8 +34,9 @@
         #go-btn { background: var(--accent-color); color: white; border: none; padding: 6px 16px; border-radius: 4px; cursor: pointer; font-weight: bold; }
         #go-btn:hover { background: var(--accent-hover); }
 
-        #viewport-container { flex-grow: 1; position: relative; background: white; }
-        .proxy-frame { width: 100%; height: 100%; border: none; display: none; background: white; }
+        /* コンテンツ領域をフルサイズ・確実に広げる設定 */
+        #viewport-container { flex-grow: 1; position: relative; background: white; width: 100%; height: 100%; overflow: hidden; }
+        .proxy-frame { width: 100%; height: 100%; border: none; display: none; background: white; position: absolute; top: 0; left: 0; }
         .proxy-frame.active { display: block; }
         
         #home-screen { position: absolute; inset: 0; background: var(--bg-color); display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; padding: 20px; z-index: 10; }
@@ -225,7 +226,7 @@
             const tab = tabs.find(t => t.id === activeTabId);
             if (tab && tab.url) {
                 const frame = document.getElementById('frame_' + activeTabId);
-                frame.src = `/api/proxy` + (tab.url ? `?url=${encodeURIComponent(tab.url)}` : '');
+                frame.src = `/api/proxy?url=${encodeURIComponent(tab.url)}`;
             }
         }
     </script>
