@@ -22,7 +22,6 @@ export default async function handler(request) {
   }
 
   try {
-    // リクエストヘッダーの構築
     const headers = {
       'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
       'Accept': request.headers.get('Accept') || '*/*',
@@ -36,7 +35,6 @@ export default async function handler(request) {
       headers['Content-Type'] = contentTypeHeader;
     }
 
-    // POSTやPUTなどのボディ（送信データ）を転送する設定
     const fetchOptions = {
       headers: headers,
       method: request.method,
@@ -45,13 +43,13 @@ export default async function handler(request) {
 
     if (request.method !== 'GET' && request.method !== 'HEAD') {
       fetchOptions.body = request.body;
-      fetchOptions.duplex = 'half'; // Vercel Edge RuntimeでのストリーミングPOSTに必須
+      fetchOptions.duplex = 'half';
     }
 
     const fetchReq = new Request(targetUrl.toString(), fetchOptions);
     const response = await fetch(fetchReq);
 
-    // リダイレクト処理 (301, 302など)
+    // リダイレクト処理
     if ([301, 302, 303, 307, 308].includes(response.status)) {
       const location = response.headers.get('Location');
       if (location) {
@@ -82,10 +80,88 @@ export default async function handler(request) {
     const origin = `${targetUrl.protocol}//${targetUrl.host}`;
     const proxyBase = `/api/proxy?url=`;
 
+    // 1. HTMLの場合：ゲーム用パッチ ＋ Baseタグ ＋ アセット書き換え
     if (contentType.includes('text/html')) {
       let html = await response.text();
 
-      // パス書き換え
+      const gameEnginePatch = `
+        <script>
+          (function() {
+            const proxyBase = '/api/proxy?url=';
+            const targetOrigin = "${origin}";
+            const targetPath = "${targetUrl.pathname}";
+
+            function resolveUrl(u) {
+              if (!u) return u;
+              if (typeof u !== 'string') return u;
+              if (u.startsWith(proxyBase) || u.startsWith('data:') || u.startsWith('blob:') || u.startsWith('javascript:')) {
+                return u;
+              }
+              let absolute = u;
+              if (u.startsWith('//')) {
+                absolute = window.location.protocol + u;
+              } else if (u.startsWith('/')) {
+                absolute = targetOrigin + u;
+              } else if (!u.startsWith('http://') && !u.startsWith('https://')) {
+                const baseDir = targetPath.substring(0, targetPath.lastIndexOf('/') + 1);
+                absolute = targetOrigin + baseDir + u;
+              }
+              return proxyBase + encodeURIComponent(absolute);
+            }
+
+            // fetchのオーバーライド
+            const origFetch = window.fetch;
+            window.fetch = function(resource, init) {
+              let url = resource;
+              if (typeof resource === 'string') {
+                url = resolveUrl(resource);
+              } else if (resource instanceof Request) {
+                const newReqUrl = resolveUrl(resource.url);
+                resource = new Request(newReqUrl, init);
+              }
+              return origFetch(resource, init);
+            };
+
+            // XHRのオーバーライド
+            const origOpen = XMLHttpRequest.prototype.open;
+            XMLHttpRequest.prototype.open = function(method, url, async, user, password) {
+              if (typeof url === 'string') {
+                url = resolveUrl(url);
+              }
+              return origOpen.call(this, method, url, async, user, password);
+            };
+
+            // 動的要素生成の属性書き換え
+            const origSetAttribute = Element.prototype.setAttribute;
+            Element.prototype.setAttribute = function(name, value) {
+              if ((name === 'src' || name === 'href' || name === 'action') && typeof value === 'string') {
+                value = resolveUrl(value);
+              }
+              return origSetAttribute.call(this, name, value);
+            };
+
+            // 画像読み込みのフック
+            const OrigImage = window.Image;
+            window.Image = function(width, height) {
+              const img = new OrigImage(width, height);
+              const origImgSrcDesc = Object.getOwnPropertyDescriptor(HTMLImageElement.prototype, 'src');
+              Object.defineProperty(img, 'src', {
+                set(val) { origImgSrcDesc.set.call(this, resolveUrl(val)); },
+                get() { return origImgSrcDesc.get.call(this); }
+              });
+              return img;
+            };
+
+            // ゲームにフォーカスを自動であててキー入力を有効にする
+            window.addEventListener('DOMContentLoaded', () => {
+              window.focus();
+              document.body.click();
+            });
+          })();
+        </script>
+        <base href="${proxyBase}${encodeURIComponent(origin + targetUrl.pathname)}">
+      `;
+
       html = html.replace(/(href|src|action|formaction)=["'](\/[^"']*)["']/gi, (match, attr, path) => {
         if (path.startsWith('//')) {
           return `${attr}="${proxyBase}${encodeURIComponent(targetUrl.protocol + path)}"`;
@@ -94,58 +170,16 @@ export default async function handler(request) {
       });
 
       html = html.replace(/(href|src|action)=["'](https?:\/\/[^"']+)["']/gi, (match, attr, fullUrl) => {
-        if (fullUrl.startsWith(origin) || fullUrl.includes('script.google.com') || fullUrl.includes('googleusercontent.com')) {
+        if (fullUrl.startsWith(origin) || fullUrl.includes('bravetyping.net') || fullUrl.includes('typingerz.com')) {
           return `${attr}="${proxyBase}${encodeURIComponent(fullUrl)}"`;
         }
         return match;
       });
 
-      // JSからのfetch / XHR をすべてプロキシ経由にするパッチ
-      const patchScript = `
-        <script>
-          (function() {
-            const proxyBase = '/api/proxy?url=';
-            const targetOrigin = "${origin}";
-
-            const originalFetch = window.fetch;
-            window.fetch = function(resource, init) {
-              let url = resource;
-              if (typeof resource === 'string') {
-                if (url.startsWith('/')) {
-                  url = targetOrigin + url;
-                } else if (!url.startsWith('http://') && !url.startsWith('https://') && !url.startsWith(proxyBase)) {
-                  url = targetOrigin + '/' + url;
-                }
-                if ((url.startsWith('http://') || url.startsWith('https://')) && !url.includes(proxyBase)) {
-                  url = proxyBase + encodeURIComponent(url);
-                }
-              }
-              return originalFetch(url, init);
-            };
-
-            const originalOpen = XMLHttpRequest.prototype.open;
-            XMLHttpRequest.prototype.open = function(method, url, async, user, password) {
-              let targetUrl = url;
-              if (typeof targetUrl === 'string') {
-                if (targetUrl.startsWith('/')) {
-                  targetUrl = targetOrigin + targetUrl;
-                } else if (!targetUrl.startsWith('http://') && !targetUrl.startsWith('https://') && !targetUrl.includes(proxyBase)) {
-                  targetUrl = targetOrigin + '/' + targetUrl;
-                }
-                if ((targetUrl.startsWith('http://') || targetUrl.startsWith('https://')) && !targetUrl.includes(proxyBase)) {
-                  targetUrl = proxyBase + encodeURIComponent(targetUrl);
-                }
-              }
-              return originalOpen.call(this, method, targetUrl, async, user, password);
-            };
-          })();
-        </script>
-      `;
-
       if (html.includes('<head>')) {
-        html = html.replace('<head>', '<head>' + patchScript);
+        html = html.replace('<head>', '<head>' + gameEnginePatch);
       } else {
-        html = patchScript + html;
+        html = gameEnginePatch + html;
       }
 
       const newResponse = new Response(html, response);
@@ -155,7 +189,7 @@ export default async function handler(request) {
       return newResponse;
     }
 
-    // CSSの書き換え
+    // 2. CSSの書き換え
     if (contentType.includes('text/css')) {
       let css = await response.text();
       css = css.replace(/url\(\s*["']?([^"')]+)["']?\s*\)/gi, (match, assetPath) => {
