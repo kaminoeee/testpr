@@ -22,21 +22,36 @@ export default async function handler(request) {
   }
 
   try {
-    const fetchReq = new Request(targetUrl.toString(), {
-      headers: {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
-        'Accept': request.headers.get('Accept') || '*/*',
-        'Accept-Language': 'ja,en-US;q=0.9,en;q=0.8',
-        'Referer': targetUrl.origin,
-        'Cookie': request.headers.get('Cookie') || ''
-      },
+    // リクエストヘッダーの構築
+    const headers = {
+      'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
+      'Accept': request.headers.get('Accept') || '*/*',
+      'Accept-Language': 'ja,en-US;q=0.9,en;q=0.8',
+      'Referer': targetUrl.origin,
+      'Cookie': request.headers.get('Cookie') || ''
+    };
+
+    const contentTypeHeader = request.headers.get('content-type');
+    if (contentTypeHeader) {
+      headers['Content-Type'] = contentTypeHeader;
+    }
+
+    // POSTやPUTなどのボディ（送信データ）を転送する設定
+    const fetchOptions = {
+      headers: headers,
       method: request.method,
       redirect: 'manual'
-    });
+    };
 
+    if (request.method !== 'GET' && request.method !== 'HEAD') {
+      fetchOptions.body = request.body;
+      fetchOptions.duplex = 'half'; // Vercel Edge RuntimeでのストリーミングPOSTに必須
+    }
+
+    const fetchReq = new Request(targetUrl.toString(), fetchOptions);
     const response = await fetch(fetchReq);
 
-    // リダイレクト処理
+    // リダイレクト処理 (301, 302など)
     if ([301, 302, 303, 307, 308].includes(response.status)) {
       const location = response.headers.get('Location');
       if (location) {
@@ -70,7 +85,7 @@ export default async function handler(request) {
     if (contentType.includes('text/html')) {
       let html = await response.text();
 
-      // HTML内のパス書き換え
+      // パス書き換え
       html = html.replace(/(href|src|action|formaction)=["'](\/[^"']*)["']/gi, (match, attr, path) => {
         if (path.startsWith('//')) {
           return `${attr}="${proxyBase}${encodeURIComponent(targetUrl.protocol + path)}"`;
@@ -85,14 +100,13 @@ export default async function handler(request) {
         return match;
       });
 
-      // 画面白飛び対策：JSからの非同期通信(fetch/XHR)をすべてプロキシ経由に書き換えるパッチ
+      // JSからのfetch / XHR をすべてプロキシ経由にするパッチ
       const patchScript = `
         <script>
           (function() {
             const proxyBase = '/api/proxy?url=';
             const targetOrigin = "${origin}";
 
-            // fetchのパッチ
             const originalFetch = window.fetch;
             window.fetch = function(resource, init) {
               let url = resource;
@@ -109,7 +123,6 @@ export default async function handler(request) {
               return originalFetch(url, init);
             };
 
-            // XMLHttpRequestのパッチ
             const originalOpen = XMLHttpRequest.prototype.open;
             XMLHttpRequest.prototype.open = function(method, url, async, user, password) {
               let targetUrl = url;
