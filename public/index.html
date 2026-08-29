@@ -1,249 +1,122 @@
 <!DOCTYPE html>
 <html lang="ja">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Web Proxy Browser</title>
-    <style>
-        :root {
-            --bg-color: #0f172a;
-            --panel-bg: #1e293b;
-            --text-color: #f8fafc;
-            --border-color: #334155;
-            --accent-color: #3b82f6;
-            --accent-hover: #2563eb;
-        }
-        * { box-sizing: border-box; margin: 0; padding: 0; }
-        body { font-family: system-ui, -apple-system, sans-serif; background: var(--bg-color); color: var(--text-color); height: 100vh; display: flex; flex-direction: column; overflow: hidden; }
-        
-        #browser-header { background: var(--panel-bg); border-bottom: 1px solid var(--border-color); display: flex; flex-direction: column; flex-shrink: 0; }
-        
-        #tab-bar { display: flex; overflow-x: auto; background: #090d16; padding: 6px 6px 0 6px; gap: 4px; border-bottom: 1px solid var(--border-color); }
-        .tab { background: #1e293b; color: #94a3b8; padding: 6px 12px; font-size: 0.85rem; border-radius: 6px 6px 0 0; cursor: pointer; display: flex; align-items: center; gap: 8px; max-width: 180px; min-width: 100px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; border: 1px solid transparent; }
-        .tab.active { background: var(--panel-bg); color: var(--text-color); border-color: var(--border-color); border-bottom: none; }
-        .tab .close-tab { font-size: 1rem; border-radius: 50%; padding: 0 4px; }
-        .tab .close-tab:hover { background: #ef4444; color: white; }
-        #new-tab-btn { background: none; border: none; color: #94a3b8; font-size: 1.2rem; cursor: pointer; padding: 0 10px; border-radius: 4px; }
-        #new-tab-btn:hover { background: rgba(255,255,255,0.1); color: white; }
-
-        #toolbar { display: flex; align-items: center; padding: 8px 12px; gap: 8px; }
-        .nav-btn { background: #334155; color: white; border: none; padding: 6px 12px; border-radius: 4px; cursor: pointer; font-size: 0.9rem; }
-        .nav-btn:hover { background: #475569; }
-        #url-form { flex-grow: 1; display: flex; gap: 8px; }
-        #url-input { flex-grow: 1; padding: 6px 12px; background: #0f172a; border: 1px solid var(--border-color); color: white; border-radius: 4px; font-size: 0.95rem; }
-        #go-btn { background: var(--accent-color); color: white; border: none; padding: 6px 16px; border-radius: 4px; cursor: pointer; font-weight: bold; }
-        #go-btn:hover { background: var(--accent-hover); }
-
-        #viewport-container { flex-grow: 1; position: relative; background: white; width: 100%; height: 100%; overflow: hidden; }
-        .proxy-frame { width: 100%; height: 100%; border: none; display: none; background: white; position: absolute; top: 0; left: 0; }
-        .proxy-frame.active { display: block; }
-        
-        #home-screen { position: absolute; inset: 0; background: var(--bg-color); display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; padding: 20px; z-index: 10; }
-        #home-screen h1 { margin-bottom: 16px; font-size: 2rem; color: #f8fafc; }
-        .home-form { width: 100%; max-width: 500px; display: flex; gap: 8px; }
-        .home-form input { flex-grow: 1; padding: 12px; border-radius: 6px; border: 1px solid var(--border-color); background: #1e293b; color: white; font-size: 1rem; }
-        .home-form button { padding: 12px 24px; border-radius: 6px; border: none; background: var(--accent-color); color: white; font-weight: bold; cursor: pointer; }
-    </style>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>eeeproxy</title>
+  <style>
+    body, html {
+      margin: 0;
+      padding: 0;
+      height: 100%;
+      font-family: sans-serif;
+      background: #121212;
+      color: #fff;
+      display: flex;
+      flex-direction: column;
+    }
+    #toolbar {
+      background: #1e1e1e;
+      padding: 10px;
+      display: flex;
+      gap: 10px;
+      box-shadow: 0 2px 5px rgba(0,0,0,0.5);
+      z-index: 10;
+    }
+    #url-form {
+      flex: 1;
+      display: flex;
+      gap: 10px;
+    }
+    #url-input {
+      flex: 1;
+      padding: 8px 12px;
+      border-radius: 4px;
+      border: 1px solid #444;
+      background: #2a2a2a;
+      color: #fff;
+      font-size: 16px;
+    }
+    button {
+      padding: 8px 16px;
+      background: #de5833; /* DuckDuckGo Orange */
+      border: none;
+      border-radius: 4px;
+      color: white;
+      font-weight: bold;
+      cursor: pointer;
+    }
+    button:hover {
+      background: #c44725;
+    }
+    #browser-frame {
+      flex: 1;
+      border: none;
+      background: #fff;
+      width: 100%;
+      height: calc(100% - 55px);
+    }
+  </style>
 </head>
 <body>
+  <div id="toolbar">
+    <button id="back-btn">←</button>
+    <button id="forward-btn">→</button>
+    <button id="home-btn">🏠 DDG</button>
+    <form id="url-form">
+      <input type="text" id="url-input" placeholder="URLを入力 または DuckDuckGoで検索..." />
+      <button type="submit" id="go-btn">検索 / 移動</button>
+    </form>
+  </div>
+  <iframe id="browser-frame" src=""></iframe>
 
-    <div id="browser-header">
-        <div id="tab-bar">
-            <div id="tabs-container"></div>
-            <button id="new-tab-btn" onclick="addNewTab()">+</button>
-        </div>
-        <div id="toolbar">
-            <button class="nav-btn" onclick="goBack()">戻る</button>
-            <button class="nav-btn" onclick="goForward()">進む</button>
-            <button class="nav-btn" onclick="reloadTab()">更新</button>
-            <form id="url-form" onsubmit="navigateTo(event)">
-                <input type="text" id="url-input" placeholder="https://example.com を入力してアクセス">
-                <button type="submit" id="go-btn">移動</button>
-            </form>
-        </div>
-    </div>
+  <script>
+    const urlInput = document.getElementById('url-input');
+    const urlForm = document.getElementById('url-form');
+    const browserFrame = document.getElementById('browser-frame');
+    const homeBtn = document.getElementById('home-btn');
+    const backBtn = document.getElementById('back-btn');
+    const forwardBtn = document.getElementById('forward-btn');
 
-    <div id="viewport-container">
-        <div id="home-screen">
-            <h1>Web Proxy Browser</h1>
-            <form class="home-form" onsubmit="navigateHome(event)">
-                <input type="text" id="home-input" placeholder="https://example.com" required>
-                <button type="submit">アクセス</button>
-            </form>
-        </div>
-        <div id="frames-container"></div>
-    </div>
+    function loadUrl(inputVal) {
+      if (!inputVal) return;
+      
+      let targetUrl = inputVal.trim();
+      
+      // URL形式かどうかを判定（ドメインらしい文字列やhttp/httpsで始まっているか）
+      const isUrl = /^(https?:\/\/)?[\w.-]+\.[a-z]{2,}([\/?#].*)?$/i.test(targetUrl) || targetUrl.startsWith('http://') || targetUrl.startsWith('https://');
 
-    <script>
-        let tabs = [];
-        let activeTabId = null;
+      if (!isUrl) {
+        // URLではなくキーワードの場合はDuckDuckGoで検索
+        targetUrl = 'https://duckduckgo.com/?q=' + encodeURIComponent(targetUrl);
+      } else if (!targetUrl.startsWith('http://') && !targetUrl.startsWith('https://')) {
+        targetUrl = 'https://' + targetUrl;
+      }
 
-        window.onload = function() {
-            addNewTab();
-        };
+      const proxyUrl = '/api/proxy?url=' + encodeURIComponent(targetUrl);
+      browserFrame.src = proxyUrl;
+      urlInput.value = targetUrl;
+    }
 
-        function addNewTab(url = "", title = "新しいタブ") {
-            const id = 'tab_' + Date.now();
-            tabs.push({ id, url, title, history: [], historyIndex: -1 });
-            
-            const iframe = document.createElement('iframe');
-            iframe.className = 'proxy-frame';
-            iframe.id = 'frame_' + id;
-            iframe.setAttribute('sandbox', 'allow-scripts allow-same-origin allow-forms allow-popups');
-            
-            // サイトの本当のタイトルを取得してタブ名に自動反映するリスナー
-            iframe.onload = function() {
-                try {
-                    const doc = iframe.contentDocument || iframe.contentWindow.document;
-                    if (doc && doc.title) {
-                        const tab = tabs.find(t => t.id === id);
-                        if (tab) {
-                            tab.title = doc.title;
-                            renderTabs();
-                        }
-                    }
-                } catch(e) {}
-            };
+    urlForm.addEventListener('submit', (e) => {
+      e.preventDefault();
+      loadUrl(urlInput.value);
+    });
 
-            document.getElementById('frames-container').appendChild(iframe);
+    homeBtn.addEventListener('click', () => {
+      loadUrl('https://duckduckgo.com/');
+    });
 
-            renderTabs();
-            switchTab(id);
-        }
+    backBtn.addEventListener('click', () => {
+      try { browserFrame.contentWindow.history.back(); } catch(e) {}
+    });
 
-        function renderTabs() {
-            const container = document.getElementById('tabs-container');
-            container.innerHTML = '';
-            tabs.forEach(tab => {
-                const el = document.createElement('div');
-                el.className = `tab ${tab.id === activeTabId ? 'active' : ''}`;
-                el.innerHTML = `<span>${tab.title}</span><span class="close-tab" onclick="event.stopPropagation(); closeTab('${tab.id}')">&times;</span>`;
-                el.onclick = () => switchTab(tab.id);
-                container.appendChild(el);
-            });
-        }
+    forwardBtn.addEventListener('click', () => {
+      try { browserFrame.contentWindow.history.forward(); } catch(e) {}
+    });
 
-        function switchTab(id) {
-            activeTabId = id;
-            document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
-            document.querySelectorAll('.proxy-frame').forEach(f => f.classList.remove('active'));
-
-            const tab = tabs.find(t => t.id === id);
-            if (tab) {
-                const frame = document.getElementById('frame_' + id);
-                renderTabs();
-                if (tab.url) {
-                    document.getElementById('home-screen').style.display = 'none';
-                    frame.classList.add('active');
-                    document.getElementById('url-input').value = tab.url;
-                } else {
-                    document.getElementById('home-screen').style.display = 'flex';
-                    document.getElementById('url-input').value = '';
-                }
-            }
-        }
-
-        function closeTab(id) {
-            if (tabs.length === 1) {
-                tabs[0].url = "";
-                tabs[0].title = "新しいタブ";
-                tabs[0].history = [];
-                tabs[0].historyIndex = -1;
-                document.getElementById('frame_' + tabs[0].id).src = 'about:blank';
-                switchTab(tabs[0].id);
-                return;
-            }
-
-            const index = tabs.findIndex(t => t.id === id);
-            document.getElementById('frame_' + id).remove();
-            tabs = tabs.filter(t => t.id !== id);
-
-            if (activeTabId === id) {
-                const nextTab = tabs[index] || tabs[tabs.length - 1];
-                switchTab(nextTab.id);
-            } else {
-                renderTabs();
-            }
-        }
-
-        function navigateHome(e) {
-            e.preventDefault();
-            const val = document.getElementById('home-input').value;
-            loadUrlInActiveTab(val);
-        }
-
-        function navigateTo(e) {
-            e.preventDefault();
-            const val = document.getElementById('url-input').value;
-            loadUrlInActiveTab(val);
-        }
-
-        function loadUrlInActiveTab(rawUrl) {
-            let target = rawUrl.trim();
-            if (!target.startsWith('http://') && !target.startsWith('https://')) {
-                target = 'https://' + target;
-            }
-
-            const tab = tabs.find(t => t.id === activeTabId);
-            if (!tab) return;
-
-            try {
-                const parsed = new URL(target);
-                tab.title = parsed.hostname;
-            } catch {
-                tab.title = target;
-            }
-
-            tab.url = target;
-            
-            if (tab.history[tab.historyIndex] !== target) {
-                tab.history = tab.history.slice(0, tab.historyIndex + 1);
-                tab.history.push(target);
-                tab.historyIndex = tab.history.length - 1;
-            }
-
-            document.getElementById('home-screen').style.display = 'none';
-            const frame = document.getElementById('frame_' + activeTabId);
-            frame.classList.add('active');
-
-            frame.src = `/api/proxy?url=${encodeURIComponent(target)}`;
-            document.getElementById('url-input').value = target;
-            renderTabs();
-        }
-
-        function goBack() {
-            const tab = tabs.find(t => t.id === activeTabId);
-            if (tab && tab.historyIndex > 0) {
-                tab.historyIndex--;
-                const target = tab.history[tab.historyIndex];
-                tab.url = target;
-                const frame = document.getElementById('frame_' + activeTabId);
-                frame.src = `/api/proxy?url=${encodeURIComponent(target)}`;
-                document.getElementById('url-input').value = target;
-                renderTabs();
-            }
-        }
-
-        function goForward() {
-            const tab = tabs.find(t => t.id === activeTabId);
-            if (tab && tab.historyIndex < tab.history.length - 1) {
-                tab.historyIndex++;
-                const target = tab.history[tab.historyIndex];
-                tab.url = target;
-                const frame = document.getElementById('frame_' + activeTabId);
-                frame.src = `/api/proxy?url=${encodeURIComponent(target)}`;
-                document.getElementById('url-input').value = target;
-                renderTabs();
-            }
-        }
-
-        function reloadTab() {
-            const tab = tabs.find(t => t.id === activeTabId);
-            if (tab && tab.url) {
-                const frame = document.getElementById('frame_' + activeTabId);
-                frame.src = `/api/proxy?url=${encodeURIComponent(tab.url)}`;
-            }
-        }
-    </script>
+    // 初期起動時はDuckDuckGoを表示
+    loadUrl('https://duckduckgo.com/');
+  </script>
 </body>
 </html>
