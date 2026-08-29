@@ -3,24 +3,24 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>eeeproxy</title>
+  <title>Proxy Browser</title>
   <style>
     body, html {
       margin: 0;
       padding: 0;
       height: 100%;
       font-family: sans-serif;
-      background: #121212;
+      background: #0f172a;
       color: #fff;
       display: flex;
       flex-direction: column;
     }
     #toolbar {
-      background: #1e1e1e;
-      padding: 10px;
+      background: #1e293b;
+      padding: 12px 16px;
       display: flex;
-      gap: 10px;
-      box-shadow: 0 2px 5px rgba(0,0,0,0.5);
+      gap: 12px;
+      box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
       z-index: 10;
     }
     #url-form {
@@ -30,42 +30,44 @@
     }
     #url-input {
       flex: 1;
-      padding: 8px 12px;
-      border-radius: 4px;
-      border: 1px solid #444;
-      background: #2a2a2a;
+      padding: 10px 14px;
+      border-radius: 6px;
+      border: 1px solid #334155;
+      background: #0f172a;
       color: #fff;
-      font-size: 16px;
+      font-size: 15px;
+      outline: none;
+    }
+    #url-input:focus {
+      border-color: #3b82f6;
     }
     button {
-      padding: 8px 16px;
-      background: #de5833; /* DuckDuckGo Orange */
+      padding: 10px 20px;
+      background: #3b82f6;
       border: none;
-      border-radius: 4px;
+      border-radius: 6px;
       color: white;
-      font-weight: bold;
+      font-weight: 600;
       cursor: pointer;
+      transition: background 0.2s;
     }
     button:hover {
-      background: #c44725;
+      background: #2563eb;
     }
     #browser-frame {
       flex: 1;
       border: none;
       background: #fff;
       width: 100%;
-      height: calc(100% - 55px);
+      height: calc(100% - 60px);
     }
   </style>
 </head>
 <body>
   <div id="toolbar">
-    <button id="back-btn">←</button>
-    <button id="forward-btn">→</button>
-    <button id="home-btn">🏠 DDG</button>
     <form id="url-form">
-      <input type="text" id="url-input" placeholder="URLを入力 または DuckDuckGoで検索..." />
-      <button type="submit" id="go-btn">検索 / 移動</button>
+      <input type="text" id="url-input" placeholder="URLまたは検索キーワードを入力..." />
+      <button type="submit" id="go-btn">アクセス / 検索</button>
     </form>
   </div>
   <iframe id="browser-frame" src=""></iframe>
@@ -74,20 +76,19 @@
     const urlInput = document.getElementById('url-input');
     const urlForm = document.getElementById('url-form');
     const browserFrame = document.getElementById('browser-frame');
-    const homeBtn = document.getElementById('home-btn');
-    const backBtn = document.getElementById('back-btn');
-    const forwardBtn = document.getElementById('forward-btn');
 
-    function loadUrl(inputVal) {
+    urlForm.addEventListener('submit', (e) => {
+      e.preventDefault();
+      let inputVal = urlInput.value.trim();
       if (!inputVal) return;
-      
-      let targetUrl = inputVal.trim();
-      
-      // URL形式かどうかを判定（ドメインらしい文字列やhttp/httpsで始まっているか）
+
+      let targetUrl = inputVal;
+
+      // URL形式かどうかを判定（http/httpsで始まる、またはドメインの形をしているか）
       const isUrl = /^(https?:\/\/)?[\w.-]+\.[a-z]{2,}([\/?#].*)?$/i.test(targetUrl) || targetUrl.startsWith('http://') || targetUrl.startsWith('https://');
 
       if (!isUrl) {
-        // URLではなくキーワードの場合はDuckDuckGoで検索
+        // URLではない場合はDuckDuckGoで検索
         targetUrl = 'https://duckduckgo.com/?q=' + encodeURIComponent(targetUrl);
       } else if (!targetUrl.startsWith('http://') && !targetUrl.startsWith('https://')) {
         targetUrl = 'https://' + targetUrl;
@@ -96,27 +97,11 @@
       const proxyUrl = '/api/proxy?url=' + encodeURIComponent(targetUrl);
       browserFrame.src = proxyUrl;
       urlInput.value = targetUrl;
-    }
-
-    urlForm.addEventListener('submit', (e) => {
-      e.preventDefault();
-      loadUrl(urlInput.value);
-    });
-
-    homeBtn.addEventListener('click', () => {
-      loadUrl('https://duckduckgo.com/');
-    });
-
-    backBtn.addEventListener('click', () => {
-      try { browserFrame.contentWindow.history.back(); } catch(e) {}
-    });
-
-    forwardBtn.addEventListener('click', () => {
-      try { browserFrame.contentWindow.history.forward(); } catch(e) {}
     });
 
     // 初期起動時はDuckDuckGoを表示
-    loadUrl('https://duckduckgo.com/');
+    urlInput.value = 'https://duckduckgo.com/';
+    browserFrame.src = '/api/proxy?url=' + encodeURIComponent('https://duckduckgo.com/');
   </script>
 </body>
 </html>
