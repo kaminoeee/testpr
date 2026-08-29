@@ -34,7 +34,6 @@
         #go-btn { background: var(--accent-color); color: white; border: none; padding: 6px 16px; border-radius: 4px; cursor: pointer; font-weight: bold; }
         #go-btn:hover { background: var(--accent-hover); }
 
-        /* コンテンツ領域をフルサイズ・確実に広げる設定 */
         #viewport-container { flex-grow: 1; position: relative; background: white; width: 100%; height: 100%; overflow: hidden; }
         .proxy-frame { width: 100%; height: 100%; border: none; display: none; background: white; position: absolute; top: 0; left: 0; }
         .proxy-frame.active { display: block; }
@@ -90,6 +89,22 @@
             const iframe = document.createElement('iframe');
             iframe.className = 'proxy-frame';
             iframe.id = 'frame_' + id;
+            iframe.setAttribute('sandbox', 'allow-scripts allow-same-origin allow-forms allow-popups');
+            
+            // サイトの本当のタイトルを取得してタブ名に自動反映するリスナー
+            iframe.onload = function() {
+                try {
+                    const doc = iframe.contentDocument || iframe.contentWindow.document;
+                    if (doc && doc.title) {
+                        const tab = tabs.find(t => t.id === id);
+                        if (tab) {
+                            tab.title = doc.title;
+                            renderTabs();
+                        }
+                    }
+                } catch(e) {}
+            };
+
             document.getElementById('frames-container').appendChild(iframe);
 
             renderTabs();
