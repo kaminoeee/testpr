@@ -16,10 +16,8 @@
         * { box-sizing: border-box; margin: 0; padding: 0; }
         body { font-family: system-ui, -apple-system, sans-serif; background: var(--bg-color); color: var(--text-color); height: 100vh; display: flex; flex-direction: column; overflow: hidden; }
         
-        /* ツールバーとタブエリア */
         #browser-header { background: var(--panel-bg); border-bottom: 1px solid var(--border-color); display: flex; flex-direction: column; }
         
-        /* タブバー */
         #tab-bar { display: flex; overflow-x: auto; background: #090d16; padding: 6px 6px 0 6px; gap: 4px; border-bottom: 1px solid var(--border-color); }
         .tab { background: #1e293b; color: #94a3b8; padding: 6px 12px; font-size: 0.85rem; border-radius: 6px 6px 0 0; cursor: pointer; display: flex; align-items: center; gap: 8px; max-width: 180px; min-width: 100px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; border: 1px solid transparent; }
         .tab.active { background: var(--panel-bg); color: var(--text-color); border-color: var(--border-color); border-bottom: none; }
@@ -28,7 +26,6 @@
         #new-tab-btn { background: none; border: none; color: #94a3b8; font-size: 1.2rem; cursor: pointer; padding: 0 10px; border-radius: 4px; }
         #new-tab-btn:hover { background: rgba(255,255,255,0.1); color: white; }
 
-        /* ナビゲーションツールバー */
         #toolbar { display: flex; align-items: center; padding: 8px 12px; gap: 8px; }
         .nav-btn { background: #334155; color: white; border: none; padding: 6px 12px; border-radius: 4px; cursor: pointer; font-size: 0.9rem; }
         .nav-btn:hover { background: #475569; }
@@ -37,13 +34,11 @@
         #go-btn { background: var(--accent-color); color: white; border: none; padding: 6px 16px; border-radius: 4px; cursor: pointer; font-weight: bold; }
         #go-btn:hover { background: var(--accent-hover); }
 
-        /* コンテンツ表示エリア */
         #viewport-container { flex-grow: 1; position: relative; background: white; }
         .proxy-frame { width: 100%; height: 100%; border: none; display: none; background: white; }
         .proxy-frame.active { display: block; }
         
-        /* 初期ホーム画面 */
-        #home-screen { position: absolute; inset: 0; background: var(--bg-color); display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; padding: 20px; }
+        #home-screen { position: absolute; inset: 0; background: var(--bg-color); display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; padding: 20px; z-index: 10; }
         #home-screen h1 { margin-bottom: 16px; font-size: 2rem; color: #f8fafc; }
         .home-form { width: 100%; max-width: 500px; display: flex; gap: 8px; }
         .home-form input { flex-grow: 1; padding: 12px; border-radius: 6px; border: 1px solid var(--border-color); background: #1e293b; color: white; font-size: 1rem; }
@@ -58,9 +53,9 @@
             <button id="new-tab-btn" onclick="addNewTab()">+</button>
         </div>
         <div id="toolbar">
-            <button class="nav-btn" onclick="goBack()">◀ 戻る</button>
-            <button class="nav-btn" onclick="goForward()">▶ 進む</button>
-            <button class="nav-btn" onclick="reloadTab()">🔄 更新</button>
+            <button class="nav-btn" onclick="goBack()">戻る</button>
+            <button class="nav-btn" onclick="goForward()">進む</button>
+            <button class="nav-btn" onclick="reloadTab()">更新</button>
             <form id="url-form" onsubmit="navigateTo(event)">
                 <input type="text" id="url-input" placeholder="https://example.com を入力してアクセス">
                 <button type="submit" id="go-btn">移動</button>
@@ -83,15 +78,14 @@
         let tabs = [];
         let activeTabId = null;
 
-        function init() {
-            addNewTab("https://example.com", "新しいタブ");
-        }
+        window.onload = function() {
+            addNewTab();
+        };
 
         function addNewTab(url = "", title = "新しいタブ") {
             const id = 'tab_' + Date.now();
             tabs.push({ id, url, title, history: [], historyIndex: -1 });
             
-            // iframeの作成
             const iframe = document.createElement('iframe');
             iframe.className = 'proxy-frame';
             iframe.id = 'frame_' + id;
@@ -99,10 +93,6 @@
 
             renderTabs();
             switchTab(id);
-
-            if (url && url !== "https://example.com") {
-                loadUrlInActiveTab(url);
-            }
         }
 
         function renderTabs() {
@@ -139,7 +129,6 @@
 
         function closeTab(id) {
             if (tabs.length === 1) {
-                // 最後のタブならホームに戻す
                 tabs[0].url = "";
                 tabs[0].title = "新しいタブ";
                 tabs[0].history = [];
@@ -182,10 +171,15 @@
             const tab = tabs.find(t => t.id === activeTabId);
             if (!tab) return;
 
+            try {
+                const parsed = new URL(target);
+                tab.title = parsed.hostname;
+            } catch {
+                tab.title = target;
+            }
+
             tab.url = target;
-            tab.title = target;
             
-            // 履歴に追加
             if (tab.history[tab.historyIndex] !== target) {
                 tab.history = tab.history.slice(0, tab.historyIndex + 1);
                 tab.history.push(target);
@@ -196,7 +190,6 @@
             const frame = document.getElementById('frame_' + activeTabId);
             frame.classList.add('active');
 
-            // プロキシ経由でiframeに読み込ませる
             frame.src = `/api/proxy?url=${encodeURIComponent(target)}`;
             document.getElementById('url-input').value = target;
             renderTabs();
@@ -232,7 +225,7 @@
             const tab = tabs.find(t => t.id === activeTabId);
             if (tab && tab.url) {
                 const frame = document.getElementById('frame_' + activeTabId);
-                frame.src = `/api/proxy?url=${encodeURIComponent(tab.url)}`;
+                frame.src = `/api/proxy` + (tab.url ? `?url=${encodeURIComponent(tab.url)}` : '');
             }
         }
     </script>
