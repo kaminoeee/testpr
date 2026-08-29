@@ -19,14 +19,28 @@
       background: #1e293b;
       padding: 12px 16px;
       display: flex;
-      gap: 12px;
+      gap: 8px;
+      align-items: center;
       box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
       z-index: 10;
+    }
+    .nav-btn {
+      padding: 10px 14px;
+      background: #334155;
+      border: none;
+      border-radius: 6px;
+      color: white;
+      font-weight: bold;
+      cursor: pointer;
+      transition: background 0.2s;
+    }
+    .nav-btn:hover {
+      background: #475569;
     }
     #url-form {
       flex: 1;
       display: flex;
-      gap: 10px;
+      gap: 8px;
     }
     #url-input {
       flex: 1;
@@ -41,7 +55,7 @@
     #url-input:focus {
       border-color: #3b82f6;
     }
-    button {
+    #go-btn {
       padding: 10px 20px;
       background: #3b82f6;
       border: none;
@@ -51,31 +65,180 @@
       cursor: pointer;
       transition: background 0.2s;
     }
-    button:hover {
+    #go-btn:hover {
       background: #2563eb;
     }
-    #browser-frame {
-      flex: 1;
+    #tabs-container {
+      background: #090d16;
+      padding: 6px 16px 0 16px;
+      display: flex;
+      gap: 6px;
+      overflow-x: auto;
+      border-bottom: 1px solid #1e293b;
+    }
+    .tab {
+      background: #1e293b;
+      padding: 6px 12px;
+      border-radius: 6px 6px 0 0;
+      font-size: 13px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      max-width: 150px;
+      overflow: hidden;
+      white-space: nowrap;
+      text-overflow: ellipsis;
+      color: #94a3b8;
+    }
+    .tab.active {
+      background: #0f172a;
+      color: #fff;
+      border-top: 2px solid #3b82f6;
+    }
+    .tab-close {
+      font-weight: bold;
+      border-radius: 50%;
+      padding: 0 4px;
+    }
+    .tab-close:hover {
+      background: rgba(255,255,255,0.2);
+    }
+    #new-tab-btn {
+      background: transparent;
       border: none;
+      color: #94a3b8;
+      font-size: 16px;
+      cursor: pointer;
+      padding: 0 8px;
+    }
+    #new-tab-btn:hover {
+      color: #fff;
+    }
+    #browser-container {
+      flex: 1;
+      position: relative;
       background: #fff;
+    }
+    .browser-view {
+      position: absolute;
+      top: 0;
+      left: 0;
       width: 100%;
-      height: calc(100% - 60px);
+      height: 100%;
+      border: none;
+      display: none;
+    }
+    .browser-view.active {
+      display: block;
     }
   </style>
 </head>
 <body>
+  <div id="tabs-container">
+    <div id="tabs-list"></div>
+    <button id="new-tab-btn" title="新しいタブ">+</button>
+  </div>
   <div id="toolbar">
+    <button class="nav-btn" id="back-btn" title="戻る">←</button>
+    <button class="nav-btn" id="forward-btn" title="進む">→</button>
     <form id="url-form">
       <input type="text" id="url-input" placeholder="URLまたは検索キーワードを入力..." />
       <button type="submit" id="go-btn">アクセス / 検索</button>
     </form>
   </div>
-  <iframe id="browser-frame" src=""></iframe>
+  <div id="browser-container"></div>
 
   <script>
+    let tabs = [];
+    let activeTabId = null;
+    let nextTabId = 1;
+
+    const tabsList = document.getElementById('tabs-list');
+    const browserContainer = document.getElementById('browser-container');
     const urlInput = document.getElementById('url-input');
     const urlForm = document.getElementById('url-form');
-    const browserFrame = document.getElementById('browser-frame');
+    const backBtn = document.getElementById('back-btn');
+    const forwardBtn = document.getElementById('forward-btn');
+    const newTabBtn = document.getElementById('new-tab-btn');
+
+    function createTab(initialUrl = 'https://duckduckgo.com/') {
+      const id = nextTabId++;
+      
+      const iframe = document.createElement('iframe');
+      iframe.className = 'browser-view';
+      browserContainer.appendChild(iframe);
+
+      const tab = {
+        id,
+        title: 'DuckDuckGo',
+        url: initialUrl,
+        iframe: iframe
+      };
+
+      tabs.push(tab);
+
+      let targetUrl = initialUrl;
+      const isUrl = /^(https?:\/\/)?[\w.-]+\.[a-z]{2,}([\/?#].*)?$/i.test(targetUrl) || targetUrl.startsWith('http://') || targetUrl.startsWith('https://');
+      if (!isUrl) {
+        targetUrl = 'https://duckduckgo.com/?q=' + encodeURIComponent(targetUrl);
+      } else if (!targetUrl.startsWith('http://') && !targetUrl.startsWith('https://')) {
+        targetUrl = 'https://' + targetUrl;
+      }
+
+      iframe.src = '/api/proxy?url=' + encodeURIComponent(targetUrl);
+      
+      switchTab(id);
+      renderTabs();
+    }
+
+    function switchTab(id) {
+      activeTabId = id;
+      tabs.forEach(t => {
+        if (t.id === id) {
+          t.iframe.classList.add('active');
+          urlInput.value = t.url;
+        } else {
+          t.iframe.classList.remove('active');
+        }
+      });
+      renderTabs();
+    }
+
+    function closeTab(id, e) {
+      e.stopPropagation();
+      if (tabs.length === 1) {
+        // 最後の1つの場合はDuckDuckGoに戻す
+        tabs[0].url = 'https://duckduckgo.com/';
+        tabs[0].iframe.src = '/api/proxy?url=' + encodeURIComponent('https://duckduckgo.com/');
+        urlInput.value = 'https://duckduckgo.com/';
+        renderTabs();
+        return;
+      }
+
+      const index = tabs.findIndex(t => t.id === id);
+      if (index !== -1) {
+        tabs[index].iframe.remove();
+        tabs.splice(index, 1);
+        if (activeTabId === id) {
+          switchTab(tabs[Math.max(0, index - 1)].id);
+        } else {
+          renderTabs();
+        }
+      }
+    }
+
+    function renderTabs() {
+      tabsList.innerHTML = '';
+      tabs.forEach(t => {
+        const div = document.createElement('div');
+        div.className = 'tab' + (t.id === activeTabId ? ' active' : '');
+        div.innerHTML = `<span>${t.title || 'ページ'}</span><span class="tab-close">&times;</span>`;
+        div.addEventListener('click', () => switchTab(t.id));
+        div.querySelector('.tab-close').addEventListener('click', (e) => closeTab(t.id, e));
+        tabsList.appendChild(div);
+      });
+    }
 
     urlForm.addEventListener('submit', (e) => {
       e.preventDefault();
@@ -83,25 +246,43 @@
       if (!inputVal) return;
 
       let targetUrl = inputVal;
-
-      // URL形式かどうかを判定（http/httpsで始まる、またはドメインの形をしているか）
       const isUrl = /^(https?:\/\/)?[\w.-]+\.[a-z]{2,}([\/?#].*)?$/i.test(targetUrl) || targetUrl.startsWith('http://') || targetUrl.startsWith('https://');
 
       if (!isUrl) {
-        // URLではない場合はDuckDuckGoで検索
         targetUrl = 'https://duckduckgo.com/?q=' + encodeURIComponent(targetUrl);
       } else if (!targetUrl.startsWith('http://') && !targetUrl.startsWith('https://')) {
         targetUrl = 'https://' + targetUrl;
       }
 
-      const proxyUrl = '/api/proxy?url=' + encodeURIComponent(targetUrl);
-      browserFrame.src = proxyUrl;
-      urlInput.value = targetUrl;
+      const activeTab = tabs.find(t => t.id === activeTabId);
+      if (activeTab) {
+        activeTab.url = targetUrl;
+        activeTab.title = targetUrl;
+        activeTab.iframe.src = '/api/proxy?url=' + encodeURIComponent(targetUrl);
+        renderTabs();
+      }
     });
 
-    // 初期起動時はDuckDuckGoを表示
-    urlInput.value = 'https://duckduckgo.com/';
-    browserFrame.src = '/api/proxy?url=' + encodeURIComponent('https://duckduckgo.com/');
+    backBtn.addEventListener('click', () => {
+      const activeTab = tabs.find(t => t.id === activeTabId);
+      if (activeTab) {
+        try { activeTab.iframe.contentWindow.history.back(); } catch(e) {}
+      }
+    });
+
+    forwardBtn.addEventListener('click', () => {
+      const activeTab = tabs.find(t => t.id === activeTabId);
+      if (activeTab) {
+        try { activeTab.iframe.contentWindow.history.forward(); } catch(e) {}
+      }
+    });
+
+    newTabBtn.addEventListener('click', () => {
+      createTab('https://duckduckgo.com/');
+    });
+
+    // 起動時は新しいタブ（DuckDuckGo）を1つ開く
+    createTab('https://duckduckgo.com/');
   </script>
 </body>
 </html>
